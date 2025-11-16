@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sigorta Dosya Paneli — Offline IndexedDB</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="top">
+        <h1>Plakalar</h1>
+        <button id="newBtn" class="btn btn-primary">Yeni</button>
+      </div>
+      <input id="search" class="search" placeholder="Ara: plaka, dosya no, müşteri..." />
+      <div id="list" class="list"></div>
+      <div class="tools">
+        <button id="exportBtn" class="btn btn-ghost">Yedekle (.json)</button>
+        <button id="importBtn" class="btn btn-ghost">Geri Yükle (.json)</button>
+        <input id="importFile" type="file" accept=".json" style="display:none" />
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="placeholder" class="card">
+        <h2>Sigorta Dosya Takip Paneli (Offline)</h2>
+        <p class="muted">Fotoğraflar IndexedDB'de saklanır. Herkes yerel cihazda çalıştırabilir.</p>
+      </div>
+
+      <div id="editor" class="card hidden">
+        <div class="editor-header">
+          <div>
+            <div id="plateTitle" class="plateTitle">PLAKA</div>
+            <div id="metaInfo" class="muted small"></div>
+          </div>
+          <div class="status-wrap">
+            <label class="small muted">Durum</label>
+            <select id="statusSelect">
+              <option>Parça Bekliyor</option>
+              <option>Onarımda</option>
+              <option>Eksik Evrak</option>
+              <option>Kapandı</option>
+              <option>Ödeme Bekliyor</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="field"><label>Plaka</label><input id="plaka" type="text" /></div>
+          <div class="field"><label>Dosya No</label><input id="dosyaNo" type="text" /></div>
+          <div class="field"><label>Poliçe No</label><input id="policeNo" type="text" /></div>
+          <div class="field"><label>Müşteri Adı</label><input id="musteri" type="text" /></div>
+          <div class="field"><label>Müşteri T.C. No</label><input id="tcNo" type="text" /></div>
+          <div class="field"><label>Telefon</label><input id="telefon" type="text" /></div>
+          <div class="field"><label>Araç Marka/Model</label><input id="car" type="text" /></div>
+          <div class="field"><label>Sigorta Şirketi</label><input id="sigorta" type="text" /></div>
+          <div class="field"><label>Yapan Kişi</label><input id="author" type="text" /></div>
+          <div class="field"><label>Sigorta Eksperi</label><input id="expert" type="text" /></div>
+          <div class="field"><label>Tahmini Teslim Tarihi</label><input id="eta" type="date" /></div>
+        </div>
+
+        <div class="photos-section">
+          <label>Fotoğraf Ekle (bilgisayardan seç)</label>
+          <input id="fileInput" type="file" accept="image/*" multiple />
+          <div id="photoGrid" class="photo-grid"></div>
+          <div class="muted small">Fotoğrafı silmek için üzerine sağ tıklayın.</div>
+        </div>
+
+        <div class="notes">
+          <label>Açıklama / Notlar</label>
+          <textarea id="notlar"></textarea>
+        </div>
+
+        <div class="controls">
+          <button id="saveBtn" class="btn btn-primary">Kaydet</button>
+          <button id="editBtn" class="btn btn-ghost">Düzenle</button>
+          <button id="deleteBtn" class="btn btn-ghost">Sil</button>
+          <button id="backBtn" class="btn btn-ghost">Geri</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <footer>Veriler tarayıcıda IndexedDB'de saklanır. Yedek almayı unutmayın.</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

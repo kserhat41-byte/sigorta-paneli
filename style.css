@@ -1,0 +1,36 @@
+/* Sarı - Siyah tema */
+:root{--yellow:#FFD700;--black:#000;--bg:#070707;--card:#ffffff;--cardtext:#111827;--muted:#9CA3AF}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--yellow);height:100vh}
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:320px;background:var(--black);border-right:3px solid var(--yellow);padding:18px;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+h1{margin:0;color:var(--yellow);font-size:20px}
+.search{width:100%;padding:10px;border-radius:8px;border:1px solid #333;margin-bottom:8px;color:#000}
+.list{flex:1;overflow:auto}
+.item{padding:10px;border:1px solid var(--yellow);border-radius:8px;margin-bottom:8px;background:transparent;cursor:pointer}
+.item:hover{background:var(--yellow);color:var(--black)}
+.item-title{font-weight:700}
+.small{font-size:13px}
+.muted{color:var(--muted)}
+.tools{display:flex;gap:8px;margin-top:8px}
+.btn{border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;border:none}
+.btn-primary{background:var(--yellow);color:var(--black)}
+.btn-ghost{background:transparent;border:1px solid var(--yellow);color:var(--yellow)}
+
+.main{flex:1;padding:20px;overflow:auto}
+.card{background:var(--card);color:var(--cardtext);padding:18px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+.hidden{display:none}
+.editor-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.plateTitle{font-weight:900;font-size:22px;color:#111}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.field label{display:block;font-size:13px;margin-bottom:6px;color:#374151}
+.field input{width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb}
+.photos-section{margin-top:12px}
+.photo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.photo-grid img{width:140px;height:100px;object-fit:cover;border-radius:8px;border:1px solid #ddd;cursor:pointer}
+.notes{margin-top:12px}
+.notes textarea{width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid #e5e7eb}
+.controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+footer{position:fixed;left:0;right:0;bottom:8px;text-align:center;color:var(--muted);font-size:13px}
+@media (max-width:900px){ .sidebar{display:none} .grid{grid-template-columns:1fr} .photo-grid img{width:120px;height:80px} }
