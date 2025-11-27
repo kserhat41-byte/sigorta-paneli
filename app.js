@@ -1,242 +1,448 @@
-// app.js - IndexedDB based offline sigorta panel (final)
-const DB_NAME = 'sigorta_panel_db_v2';
-const DB_VERSION = 1;
-let db;
+console.log("APP FINAL PRO ÇALIŞIYOR");
 
-function openDB(){
-  return new Promise((res, rej)=>{
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e)=>{
-      const idb = e.target.result;
-      if(!idb.objectStoreNames.contains('items')){
-        const s = idb.createObjectStore('items', { keyPath: 'id' });
-        s.createIndex('plaka','plaka',{unique:false});
-        s.createIndex('updatedAt','updatedAt',{unique:false});
-      }
-      if(!idb.objectStoreNames.contains('photos')){
-        const p = idb.createObjectStore('photos', { keyPath: 'id' });
-        p.createIndex('itemId','itemId',{unique:false});
-      }
-    };
-    req.onsuccess = ()=>{ db = req.result; res(db); };
-    req.onerror = ()=> rej(req.error);
-  });
-}
+// --------------------------------------------------
+// IMPORTLAR
+// --------------------------------------------------
+import {
+  auth,
+  provider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  db,
+  storage,
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from "./firebase.js";
 
-function idbPut(store, val){
-  return new Promise((res, rej)=>{
-    const tx = db.transaction(store, 'readwrite');
-    const s = tx.objectStore(store);
-    const r = s.put(val);
-    r.onsuccess = ()=> res(r.result);
-    r.onerror = ()=> rej(r.error);
-  });
-}
-function idbGet(store, key){
-  return new Promise((res, rej)=>{
-    const tx = db.transaction(store,'readonly');
-    const s = tx.objectStore(store);
-    const r = s.get(key);
-    r.onsuccess = ()=> res(r.result);
-    r.onerror = ()=> rej(r.error);
-  });
-}
-function idbGetAll(store){
-  return new Promise((res, rej)=>{
-    const tx = db.transaction(store,'readonly');
-    const s = tx.objectStore(store);
-    const r = s.getAll();
-    r.onsuccess = ()=> res(r.result);
-    r.onerror = ()=> rej(r.error);
-  });
-}
-function idbDelete(store, key){
-  return new Promise((res, rej)=>{
-    const tx = db.transaction(store,'readwrite');
-    const s = tx.objectStore(store);
-    const r = s.delete(key);
-    r.onsuccess = ()=> res();
-    r.onerror = ()=> rej(r.error);
-  });
-}
+// --------------------------------------------------
+// GLOBAL STATE
+// --------------------------------------------------
+let photoURLs = [];
+let editingID = null;
 
-function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
-function qs(s){ return document.querySelector(s); }
+let allFiles = [];
+let leftFiles = [];
+let rightFiles = [];
 
-const listEl = qs('#list');
-const newBtn = qs('#newBtn');
-const searchInput = qs('#search');
-const placeholder = qs('#placeholder');
-const editor = qs('#editor');
-const plateTitle = qs('#plateTitle');
-const metaInfo = qs('#metaInfo');
-const statusSelect = qs('#statusSelect');
-const plakaEl = qs('#plaka');
-const dosyaNoEl = qs('#dosyaNo');
-const policeNoEl = qs('#policeNo');
-const musteriEl = qs('#musteri');
-const tcEl = qs('#tcNo');
-const telefonEl = qs('#telefon');
-const carEl = qs('#car');
-const sigortaEl = qs('#sigorta');
-const authorEl = qs('#author');
-const expertEl = qs('#expert');
-const teslimEl = qs('#eta');
-const fileInput = qs('#fileInput');
-const photoGrid = qs('#photoGrid');
-const notlarEl = qs('#notlar');
-const saveBtn = qs('#saveBtn');
-const editBtn = qs('#editBtn');
-const deleteBtn = qs('#deleteBtn');
-const backBtn = qs('#backBtn');
-const exportBtn = qs('#exportBtn');
-const importBtn = qs('#importBtn');
-const importFile = qs('#importFile');
+// --------------------------------------------------
+// AUTH
+// --------------------------------------------------
+const btnSignIn = document.getElementById("btnSignIn");
+const btnSignOut = document.getElementById("btnSignOut");
+const envPill = document.getElementById("envPill");
 
-let items = [];
-let selectedId = null;
+btnSignIn.addEventListener("click", () => signInWithPopup(auth, provider));
+btnSignOut.addEventListener("click", () => signOut(auth));
 
-async function loadAll(){
-  items = await idbGetAll('items');
-  items.sort((a,b)=> (b.updatedAt||b.createdAt) - (a.updatedAt||a.createdAt));
-  renderList();
-}
-
-function renderList(filter=''){
-  listEl.innerHTML='';
-  const q = (filter||'').toLowerCase();
-  items.forEach(it=>{
-    if(q){
-      const ok = (it.plaka||'').toLowerCase().includes(q) || (it.dosyaNo||'').toLowerCase().includes(q) || (it.musteri||'').toLowerCase().includes(q);
-      if(!ok) return;
-    }
-    const d = document.createElement('div');
-    d.className='item';
-    d.dataset.id = it.id;
-    d.innerHTML = `<div class="item-title">${it.plaka||'—'}</div><div class="muted small">${it.dosyaNo||''} • ${it.musteri||''}</div><div class="muted small">${it.durum||''}</div>`;
-    d.addEventListener('click', ()=> openItem(it.id));
-    listEl.appendChild(d);
-  });
-}
-
-async function openItem(id){
-  selectedId = id;
-  const it = await idbGet('items', id);
-  if(!it) return alert('Kayıt bulunamadı');
-  placeholder.classList.add('hidden'); editor.classList.remove('hidden');
-  plateTitle.textContent = it.plaka || 'PLAKA';
-  metaInfo.textContent = `Dosya: ${it.dosyaNo||'-'} • ${it.musteri||'-'}`;
-  statusSelect.value = it.durum || 'Parça Bekliyor';
-  plakaEl.value = it.plaka||''; dosyaNoEl.value = it.dosyaNo||''; policeNoEl.value = it.policeNo||''; musteriEl.value = it.musteri||'';
-  tcEl.value = it.tcNo||''; telefonEl.value = it.telefon||''; carEl.value = it.car||''; sigortaEl.value = it.sigorta||'';
-  authorEl.value = it.author||''; expertEl.value = it.expert||''; teslimEl.value = it.eta||'';
-  notlarEl.value = it.notlar||'';
-  const allPhotos = await idbGetAll('photos');
-  const photos = allPhotos.filter(p=> p.itemId === id);
-  renderPhotos(photos);
-}
-
-function renderPhotos(photos){
-  photoGrid.innerHTML='';
-  photos.forEach(p=>{
-    const img = document.createElement('img');
-    const url = URL.createObjectURL(p.blob);
-    img.src = url; img.title = p.name || '';
-    img.addEventListener('click', ()=> {
-      const w = window.open(''); w.document.write('<img src="'+url+'" style="max-width:100%;">');
-    });
-    img.addEventListener('contextmenu', async (e)=>{
-      e.preventDefault();
-      if(!confirm('Bu fotoğrafı silmek istiyor musunuz?')) return;
-      try{ await idbDelete('photos', p.id); await loadAll(); await openItem(selectedId); }catch(err){ alert('Fotoğraf silinemedi: '+err.message) }
-    });
-    photoGrid.appendChild(img);
-  });
-}
-
-async function createNew(){
-  const id = uid(); const now = Date.now();
-  const it = { id, plaka:'PLAKA', dosyaNo:'', policeNo:'', musteri:'', tcNo:'', telefon:'', car:'', sigorta:'', author:'', expert:'', eta:'', link:'', durum:'Parça Bekliyor', notlar:'', createdAt:now, updatedAt:now };
-  await idbPut('items', it); await loadAll(); openItem(id);
-}
-
-async function saveCurrent(){
-  if(!selectedId) return alert('Önce kayıt seçin.');
-  try{
-    const it = await idbGet('items', selectedId);
-    it.plaka = plakaEl.value.trim(); it.dosyaNo = dosyaNoEl.value.trim(); it.policeNo = policeNoEl.value.trim();
-    it.musteri = musteriEl.value.trim(); it.tcNo = tcEl.value.trim(); it.telefon = telefonEl.value.trim();
-    it.car = carEl.value.trim(); it.sigorta = sigortaEl.value.trim(); it.author = authorEl.value.trim();
-    it.expert = expertEl.value.trim(); it.eta = teslimEl.value || ''; it.durum = statusSelect.value || '';
-    it.notlar = notlarEl.value || ''; it.updatedAt = Date.now();
-    await idbPut('items', it);
-    await loadAll();
-    alert('Kayıt gerçekten kaydedildi.');
-  }catch(err){ alert('Kaydedilemedi: '+err.message) }
-}
-
-async function deleteCurrent(){
-  if(!selectedId) return alert('Önce kayıt seçin.');
-  if(!confirm('Bu kaydı silmek istediğine emin misin?')) return;
-  const allPhotos = await idbGetAll('photos'); const photos = allPhotos.filter(p=> p.itemId === selectedId);
-  for(const p of photos) await idbDelete('photos', p.id);
-  await idbDelete('items', selectedId);
-  selectedId = null; editor.classList.add('hidden'); placeholder.classList.remove('hidden'); await loadAll();
-}
-
-fileInput.addEventListener('change', async (e)=>{
-  if(!selectedId) return alert('Önce kayıt seçin.');
-  const files = Array.from(e.target.files || []);
-  for(const f of files){
-    try{
-      const blob = f.slice(0,f.size,f.type);
-      const photo = { id: uid(), itemId: selectedId, name: f.name, size: f.size, type: f.type, blob };
-      await idbPut('photos', photo);
-    }catch(err){ console.error(err); alert('Fotoğraf eklenemedi: '+err.message) }
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    envPill.textContent = "Giriş: " + user.displayName;
+    btnSignIn.style.display = "none";
+    btnSignOut.style.display = "inline-block";
+  } else {
+    envPill.textContent = "Giriş yapılmadı";
+    btnSignIn.style.display = "inline-block";
+    btnSignOut.style.display = "none";
   }
-  await loadAll(); await openItem(selectedId); fileInput.value='';
 });
 
-exportBtn.addEventListener('click', async ()=>{
-  try{
-    const allItems = await idbGetAll('items');
-    const allPhotos = await idbGetAll('photos');
-    const photosConverted = [];
-    for(const p of allPhotos){
-      const dataUrl = await blobToDataURL(p.blob);
-      photosConverted.push({ id: p.id, itemId: p.itemId, name: p.name, type: p.type, data: dataUrl });
-    }
-    const out = { items: allItems, photos: photosConverted, exportedAt: Date.now() };
-    const blob = new Blob([JSON.stringify(out)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'sigorta_backup_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json'; a.click();
-    URL.revokeObjectURL(url);
-  }catch(err){ alert('Yedek alınamadı: '+err.message) }
+// --------------------------------------------------
+// FORM ALANLARI
+// --------------------------------------------------
+const fPlate     = document.getElementById("fPlate");
+const fFileNo    = document.getElementById("fFileNo");
+const fPolicy    = document.getElementById("fPolicy");
+const fCustomer  = document.getElementById("fCustomer");
+const fTC        = document.getElementById("fTC");
+const fPhone     = document.getElementById("fPhone");
+const fCarModel  = document.getElementById("fCarModel");
+const fInsurance = document.getElementById("fInsurance");
+const fBranch    = document.getElementById("fBranch");
+const fExpert    = document.getElementById("fExpert");
+const fWorker    = document.getElementById("fWorker");
+const fDelivery  = document.getElementById("fDelivery");
+const fStatus    = document.getElementById("fStatus");
+const fNotes     = document.getElementById("fNotes");
+
+const photoUpload = document.getElementById("photoUpload");
+const photoGrid   = document.getElementById("photoGrid");
+const sendWhatsappBtn = document.getElementById("sendWhatsappBtn");
+
+
+// --------------------------------------------------
+// FOTOĞRAF YÜKLEME
+// --------------------------------------------------
+photoUpload.addEventListener("change", async (e) => {
+  const files = e.target.files;
+
+  for (let file of files) {
+    const storageRef = ref(storage, `photos/${Date.now()}_${file.name}`);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+
+    photoURLs.push(url);
+    addPhoto(url);
+  }
 });
 
-importBtn.addEventListener('click', ()=> importFile.click());
-importFile.addEventListener('change', async (e)=>{
-  const f = e.target.files[0]; if(!f) return;
-  try{
-    const text = await f.text(); const parsed = JSON.parse(text); if(!parsed.items) return alert('Geçersiz yedek dosyası');
-    for(const it of parsed.items) await idbPut('items', it);
-    for(const p of (parsed.photos || [])){
-      const blob = dataURLToBlob(p.data);
-      await idbPut('photos', { id: p.id, itemId: p.itemId, name: p.name, type: p.type, blob });
-    }
-    await loadAll(); alert('Yedek yüklendi.');
-  }catch(err){ alert('Yedek yüklenemedi: '+err.message) }
-  importFile.value='';
+// --------------------------------------------------
+// FOTOĞRAF KARTI OLUŞTURMA
+// --------------------------------------------------
+function addPhoto(url) {
+  const index = photoURLs.length - 1;
+
+  const div = document.createElement("div");
+  div.classList.add("photo-card");
+  div.draggable = true;
+
+  div.innerHTML = `
+    <img src="${url}" class="thumb">
+    <button class="delete-photo">×</button>
+  `;
+
+  // Thumbnail → Lightbox Aç
+  div.querySelector("img").addEventListener("click", () => openGallery(index));
+
+  // Fotoğraf Silme
+  div.querySelector(".delete-photo").addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    photoURLs.splice(index, 1);
+    div.remove();
+    refreshDragIndexes();
+  });
+
+  // Drag start
+  div.addEventListener("dragstart", () => {
+    div.classList.add("dragging");
+  });
+
+  // Drag end (sıralama kaydet)
+  div.addEventListener("dragend", () => {
+    div.classList.remove("dragging");
+
+    const newOrder = [];
+    document.querySelectorAll(".photo-card img").forEach((img) => {
+      newOrder.push(img.src);
+    });
+
+    photoURLs = newOrder;
+  });
+
+  photoGrid.appendChild(div);
+}
+
+function refreshDragIndexes() {
+  photoGrid.innerHTML = "";
+  photoURLs.forEach((url) => addPhoto(url));
+}
+
+// --------------------------------------------------
+// LIGHTBOX
+// --------------------------------------------------
+const lightbox = document.getElementById("lightbox");
+const lightboxImg = document.getElementById("lightboxImg");
+const lightboxPrev = document.getElementById("lightboxPrev");
+const lightboxNext = document.getElementById("lightboxNext");
+const lightboxClose = document.getElementById("lightboxClose");
+
+let galleryIndex = 0;
+let zoomLevel = 1;
+
+function openGallery(i) {
+  galleryIndex = i;
+  zoomLevel = 1;
+
+  lightboxImg.src = photoURLs[i];
+  lightboxImg.style.transform = "scale(1)";
+  lightbox.classList.add("show");
+}
+
+lightboxClose.addEventListener("click", () => lightbox.classList.remove("show"));
+
+lightboxPrev.addEventListener("click", () => {
+  galleryIndex = (galleryIndex - 1 + photoURLs.length) % photoURLs.length;
+  lightboxImg.src = photoURLs[galleryIndex];
 });
 
-function blobToDataURL(blob){ return new Promise((res, rej)=>{ const reader = new FileReader(); reader.onload = ()=> res(reader.result); reader.onerror = ()=> rej(reader.error); reader.readAsDataURL(blob); }); }
-function dataURLToBlob(dataurl){ const arr = dataurl.split(','); const mime = arr[0].match(/:(.*?);/)[1]; const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n); while(n--) u8[n] = bstr.charCodeAt(n); return new Blob([u8], {type:mime}); }
+lightboxNext.addEventListener("click", () => {
+  galleryIndex = (galleryIndex + 1) % photoURLs.length;
+  lightboxImg.src = photoURLs[galleryIndex];
+});
 
-newBtn.addEventListener('click', ()=> createNew());
-saveBtn.addEventListener('click', ()=> saveCurrent());
-editBtn.addEventListener('click', ()=> { alert('Alanları düzenleyip ardından Kaydet butonuna basın.'); });
-deleteBtn.addEventListener('click', ()=> deleteCurrent());
-backBtn.addEventListener('click', ()=> { editor.classList.add('hidden'); placeholder.classList.remove('hidden'); selectedId=null; });
-searchInput.addEventListener('input', (e)=> renderList(e.target.value));
+lightboxImg.addEventListener("wheel", (e) => {
+  e.preventDefault();
 
-(async ()=>{ try{ await openDB(); await loadAll(); const all = await idbGetAll('items'); if(all.length===0){ const id=uid(), now=Date.now(); const it = { id, plaka:'34ABC123', dosyaNo:'S-2025-001', policeNo:'POL-998877', musteri:'Ahmet Yılmaz', tcNo:'', telefon:'05321234567', car:'Fiat Egea', sigorta:'X Sigorta', author:'Mehmet', expert:'Eksper A', eta:'2025-11-10', link:'', durum:'Parça Bekliyor', notlar:'Ön kaput - göçük - boyasız düzeltme önerildi.', createdAt:now, updatedAt:now }; await idbPut('items', it); await loadAll(); openItem(id); } }catch(err){ alert('IndexedDB açılamadı: '+err.message) } })();
+  zoomLevel += e.deltaY * -0.002;
+  zoomLevel = Math.min(Math.max(zoomLevel, 1), 3);
+
+  lightboxImg.style.transform = `scale(${zoomLevel})`;
+});
+
+// --------------------------------------------------
+// WHATSAPP TOPLU FOTO GÖNDERME
+// --------------------------------------------------
+sendWhatsappBtn.addEventListener("click", () => {
+  if (photoURLs.length === 0) {
+    return alert("Gönderilecek fotoğraf yok!");
+  }
+
+  const message =
+    "Sigorta Dosya Fotoğrafları:\n\n" + photoURLs.join("\n");
+
+  const url = "https://wa.me/?text=" + encodeURIComponent(message);
+
+  window.open(url, "_blank");
+});
+
+
+// --------------------------------------------------
+// KAYDET
+// --------------------------------------------------
+document.getElementById("saveBtn").addEventListener("click", async () => {
+  const data = {
+    plaka: fPlate.value,
+    dosyaNo: fFileNo.value,
+    police: fPolicy.value,
+    musteri: fCustomer.value,
+    tc: fTC.value,
+    telefon: fPhone.value,
+    arac: fCarModel.value,
+    sigorta: fInsurance.value,
+    sube: fBranch.value,
+    eksper: fExpert.value,
+    yapan: fWorker.value,
+    teslim: fDelivery.value,
+    durum: fStatus.value,
+    notlar: fNotes.value,
+    fotolar: photoURLs,
+    tarih: new Date().toLocaleString("tr-TR")
+  };
+
+  if (editingID) {
+    await updateDoc(doc(db, "dosyalar", editingID), data);
+    alert("Kayıt güncellendi!");
+  } else {
+    await addDoc(collection(db, "dosyalar"), data);
+    alert("Kayıt eklendi!");
+  }
+
+  clearForm();
+  loadFiles();
+});
+
+// --------------------------------------------------
+// FORM TEMİZLE
+// --------------------------------------------------
+function clearForm() {
+  editingID = null;
+
+  fPlate.value = "";
+  fFileNo.value = "";
+  fPolicy.value = "";
+  fCustomer.value = "";
+  fTC.value = "";
+  fPhone.value = "";
+  fCarModel.value = "";
+  fInsurance.value = "";
+  fBranch.value = "Aykut Polat Özel Servis";
+  fExpert.value = "";
+  fWorker.value = "";
+  fDelivery.value = "";
+  fStatus.value = "Parça Bekliyor";
+  fNotes.value = "";
+
+  photoGrid.innerHTML = "";
+  photoUpload.value = "";
+  photoURLs = [];
+}
+
+document.getElementById("newBtn").addEventListener("click", clearForm);
+
+// --------------------------------------------------
+// SİLME
+// --------------------------------------------------
+document.getElementById("deleteBtn").addEventListener("click", async () => {
+  if (!editingID) return alert("Silmek için önce bir dosya seç!");
+
+  if (!confirm("Bu dosya silinsin mi?")) return;
+
+  await deleteDoc(doc(db, "dosyalar", editingID));
+
+  alert("Dosya silindi!");
+
+  clearForm();
+  loadFiles();
+});
+
+// --------------------------------------------------
+// LİSTELEME
+// --------------------------------------------------
+async function loadFiles() {
+  const snap = await getDocs(collection(db, "dosyalar"));
+
+  allFiles = [];
+  leftFiles = [];
+  rightFiles = [];
+
+  snap.forEach((docSnap) => {
+    let d = docSnap.data();
+    let id = docSnap.id;
+
+    let full = { id, ...d };
+
+    allFiles.push(full);
+
+    if (d.sube === "Aykut Polat Özel Servis") leftFiles.push(full);
+    else rightFiles.push(full);
+  });
+
+  renderLeftList(leftFiles);
+  renderRightList(rightFiles);
+}
+
+// --------------------------------------------------
+// LİSTE OLUŞTURMA
+// --------------------------------------------------
+function renderLeftList(list) {
+  const div = document.getElementById("leftList");
+  div.innerHTML = "";
+
+  list.forEach((file) => {
+    div.appendChild(createListItem(file));
+  });
+}
+
+function renderRightList(list) {
+  const div = document.getElementById("rightList");
+  div.innerHTML = "";
+
+  list.forEach((file) => {
+    div.appendChild(createListItem(file));
+  });
+}
+
+function createListItem(file) {
+  const item = document.createElement("div");
+  item.className = "plate-item";
+
+  item.innerHTML = `
+    <strong>${file.plaka}</strong>
+    <small>${file.musteri}</small>
+    <span>${file.durum}</span>
+  `;
+
+  item.addEventListener("click", () => fillForm(file));
+
+  return item;
+}
+
+// --------------------------------------------------
+// FORM DOLDURMA
+// --------------------------------------------------
+function fillForm(file) {
+  editingID = file.id;
+
+  fPlate.value = file.plaka;
+  fFileNo.value = file.dosyaNo;
+  fPolicy.value = file.police;
+  fCustomer.value = file.musteri;
+  fTC.value = file.tc;
+  fPhone.value = file.telefon;
+  fCarModel.value = file.arac;
+  fInsurance.value = file.sigorta;
+  fBranch.value = file.sube;
+  fExpert.value = file.eksper ?? "";
+  fWorker.value = file.yapan;
+  fDelivery.value = file.teslim;
+  fStatus.value = file.durum;
+  fNotes.value = file.notlar;
+
+  photoGrid.innerHTML = "";
+  photoURLs = file.fotolar || [];
+  photoURLs.forEach(addPhoto);
+}
+
+// --------------------------------------------------
+// ARAMA SİSTEMİ
+// --------------------------------------------------
+const searchInput = document.getElementById("searchInput");
+const rightSearch = document.getElementById("rightSearch");
+
+// SOL ARAMA
+searchInput.addEventListener("input", () => {
+  const q = searchInput.value.toLowerCase();
+
+  const filtered = leftFiles.filter(f =>
+    f.plaka.toLowerCase().includes(q) ||
+    (f.musteri ?? "").toLowerCase().includes(q) ||
+    (f.dosyaNo ?? "").toLowerCase().includes(q)
+  );
+
+  renderLeftList(filtered);
+});
+
+// SAĞ ARAMA
+rightSearch.addEventListener("input", () => {
+  const q = rightSearch.value.toLowerCase();
+
+  const filtered = rightFiles.filter(f =>
+    f.plaka.toLowerCase().includes(q) ||
+    (f.musteri ?? "").toLowerCase().includes(q) ||
+    (f.dosyaNo ?? "").toLowerCase().includes(q)
+  );
+
+  renderRightList(filtered);
+});
+
+// --------------------------------------------------
+// EXCEL EXPORT
+// --------------------------------------------------
+document.getElementById("exportBtn").addEventListener("click", async () => {
+  const snap = await getDocs(collection(db, "dosyalar"));
+
+  const rows = [];
+
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+
+    rows.push({
+      Plaka: d.plaka,
+      DosyaNo: d.dosyaNo,
+      Poliçe: d.police,
+      Müşteri: d.musteri,
+      TC: d.tc,
+      Telefon: d.telefon,
+      Araç: d.arac,
+      Sigorta: d.sigorta,
+      Şube: d.sube,
+      Eksper: d.eksper ?? "",
+      Yapan: d.yapan,
+      Teslim: d.teslim,
+      Durum: d.durum,
+      Notlar: d.notlar,
+      Fotoğraf: d.fotolar?.length || 0,
+      Tarih: d.tarih
+    });
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Dosyalar");
+  XLSX.writeFile(wb, "sigorta_dosyalar.xlsx");
+
+  alert("Excel başarıyla indirildi!");
+});
+
+// --------------------------------------------------
+// BAŞLAT
+// --------------------------------------------------
+loadFiles();
