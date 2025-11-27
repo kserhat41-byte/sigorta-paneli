@@ -289,26 +289,42 @@ document.getElementById("deleteBtn").addEventListener("click", async () => {
 async function loadFiles() {
   const snap = await getDocs(collection(db, "dosyalar"));
 
-  allFiles = [];
   leftFiles = [];
   rightFiles = [];
 
-  snap.forEach((docSnap) => {
-    let d = docSnap.data();
-    let id = docSnap.id;
+  snap.forEach(docSnap => {
+    const d = docSnap.data();
+    const id = docSnap.id;
 
-    let full = { id, ...d };
+    const file = {
+      id: id,
+      plaka: d.plaka || "",
+      dosyaNo: d.dosyaNo || "",
+      police: d.police || "",
+      musteri: d.musteri || "",
+      tc: d.tc || "",
+      telefon: d.telefon || "",
+      arac: d.arac || "",
+      sigorta: d.sigorta || "",
+      sube: d.sube || "Aykut Polat Özel Servis", // yoksa default
+      eksper: d.eksper || "",
+      yapan: d.yapan || "",
+      teslim: d.teslim || "",
+      durum: d.durum || "",
+      notlar: d.notlar || "",
+      fotolar: d.fotolar || [],
+      tarih: d.tarih || ""
+    };
 
-    allFiles.push(full);
-
-    if (d.sube === "Aykut Polat Özel Servis") leftFiles.push(full);
-    else rightFiles.push(full);
+    if (file.sube === "Aykut Polat Özel Servis")
+      leftFiles.push(file);
+    else
+      rightFiles.push(file);
   });
 
   renderLeftList(leftFiles);
   renderRightList(rightFiles);
 }
-
 // --------------------------------------------------
 // LİSTE OLUŞTURMA
 // --------------------------------------------------
@@ -360,7 +376,7 @@ function fillForm(file) {
   fCarModel.value = file.arac;
   fInsurance.value = file.sigorta;
   fBranch.value = file.sube;
-  fExpert.value = file.eksper ?? "";
+  fExpert.value = file.eksper;
   fWorker.value = file.yapan;
   fDelivery.value = file.teslim;
   fStatus.value = file.durum;
@@ -370,7 +386,6 @@ function fillForm(file) {
   photoURLs = file.fotolar || [];
   photoURLs.forEach(addPhoto);
 }
-
 // --------------------------------------------------
 // ARAMA SİSTEMİ
 // --------------------------------------------------
